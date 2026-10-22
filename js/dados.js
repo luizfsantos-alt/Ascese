@@ -165,14 +165,6 @@
     4: { nome: 'Tier IV — Magia do Vazio' },
   };
 
-  // Álbum: cada grupo de cartas vira uma página. A carta guarda o id do grupo.
-  const album = [
-    ...acoes.map((ac) => ({ id: ac.id, nome: ac.nome, cartas: ac.cartas })),
-    { id: 'tier1', nome: 'Ritual — Tarô', cartas: arcanos },
-    { id: 'tier2', nome: 'Ritual — Alquimia', cartas: etapas },
-  ];
-  for (const pg of album) for (const c of pg.cartas) c.grupo = pg.id;
-
   // Variantes de carta. No máximo uma por carta; chance sobre as cartas elegíveis.
   // benef/malef multiplicam a parte boa e a ruim de cada efeito (Loucura negativa
   // é benefício). Nos decisivos, malef escala a Loucura do decisivo de perda e
@@ -189,13 +181,29 @@
   ];
 
   const demonios = [
-    { nome: 'Buer', ganha: 85, perde: 15, silencio: 0 },
-    { nome: 'Paimon', ganha: 35, perde: 35, silencio: 30 },
-    { nome: 'Andras', ganha: 15, perde: 85, silencio: 0 },
+    { nome: 'Buer', ganha: 85, perde: 15, silencio: 0, desc: 'Presidente do inferno, ensina filosofia e cura os enfermos' },
+    { nome: 'Paimon', ganha: 35, perde: 35, silencio: 30, desc: 'Rei obediente a Lúcifer, conhece todas as artes e ciências' },
+    { nome: 'Andras', ganha: 15, perde: 85, silencio: 0, desc: 'Marquês que semeia discórdia e pode matar quem o invoca' },
   ];
 
+  const moeda = {
+    asc: { nome: 'Ascensão', desc: 'A moeda caiu em Ascensão', info: 'Ascensão vai a 100' },
+    lou: { nome: 'Loucura', desc: 'A moeda caiu em Loucura', info: 'Loucura vai a 100' },
+  };
+
+  // Álbum: cada grupo vira uma página e cada entrada guarda o id do grupo.
+  // Demônios e moeda não são cartas (não têm variantes), mas também entram.
+  const album = [
+    ...acoes.map((ac) => ({ id: ac.id, nome: ac.nome, cartas: ac.cartas })),
+    { id: 'tier1', nome: 'Ritual — Tarô', cartas: arcanos },
+    { id: 'tier2', nome: 'Ritual — Alquimia', cartas: etapas },
+    { id: 'tier3', nome: 'Ritual — Goétia', cartas: demonios },
+    { id: 'tier4', nome: 'Ritual — Moeda do Vazio', cartas: [moeda.asc, moeda.lou] },
+  ];
+  for (const pg of album) for (const c of pg.cartas) c.grupo = pg.id;
+
   g.Dados = {
-    acoes, itens, tiers, demonios, album, variantes,
+    acoes, itens, tiers, demonios, moeda, album, variantes,
     META: A(100),               // Ascensão/Loucura para fim de jogo
     VONTADE_RITUAL: V(1000),
     PERDA_RITUAL: A(80),        // carta decisiva de perda

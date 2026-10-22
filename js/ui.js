@@ -158,6 +158,15 @@
     return `<button style="width:100%;margin-top:10px" data-cmd="album">${rotuloAlbum()}</button>`;
   }
 
+  function infoAlbum(c, semVontade) {
+    if (c.info) return c.info;
+    if (c.ganha !== undefined) {
+      return `<span class="pos">Ascensão ${c.ganha}%</span> <span class="neg">Loucura ${c.perde}%</span>` +
+        (c.silencio ? ` <span>Silêncio ${c.silencio}%</span>` : '');
+    }
+    return efeitos(c, semVontade);
+  }
+
   function telaAlbum() {
     const legenda = D.variantes.map((vr) =>
       `<div><span class="tag ${vr.id}">${vr.nome}</span> ${vr.desc}</div>`).join('');
@@ -172,8 +181,8 @@
         return `<div class="carta">
           <div class="nome">${c.nome}${c.cat ? ` <small>(${c.cat})</small>` : ''}</div>
           ${c.desc ? `<div class="desc">${c.desc}</div>` : ''}
-          <div class="ef">${efeitos(c, semVontade)}</div>
-          <div class="desc">Puxada ×${e.n}${vars ? ' · ' + vars : ''}</div></div>`;
+          <div class="ef">${infoAlbum(c, semVontade)}</div>
+          <div class="desc">${pg.id === 'tier3' ? 'Revelado' : pg.id === 'tier4' ? 'Caiu' : 'Puxada'} ×${e.n}${vars ? ' · ' + vars : ''}</div></div>`;
       }).join('');
       return `<details class="pagina"><summary>${pg.nome} <span>${contarAlbum(pg)}/${pg.cartas.length}</span></summary>${cartas}</details>`;
     }).join('');

@@ -238,7 +238,7 @@
     }
     if (p.tipo === 'tier4') {
       gastarItem(s, 'transmutar');
-      p.moeda = rnd() < 0.5 ? 'asc' : 'lou';
+      p.moeda = jogarMoeda(s);
       log(s, 'Transmutar: a moeda foi jogada de novo.');
       return true;
     }
@@ -263,16 +263,23 @@
     } else if (t === 3) {
       s.pend = { tipo: 'tier3', titulo: def.nome, ordem: embaralhar(D.demonios), escolha: null, res: null };
     } else {
-      s.pend = { tipo: 'tier4', titulo: def.nome, moeda: rnd() < 0.5 ? 'asc' : 'lou' };
+      s.pend = { tipo: 'tier4', titulo: def.nome, moeda: jogarMoeda(s) };
     }
     return true;
   };
+
+  function jogarMoeda(s) {
+    const lado = rnd() < 0.5 ? 'asc' : 'lou';
+    registrar(s, D.moeda[lado]);
+    return lado;
+  }
 
   Motor.escolherSilhueta = function (s, i) {
     const p = s.pend;
     if (s.fim || !p || p.tipo !== 'tier3' || p.escolha !== null) return false;
     p.escolha = i;
     const d = p.ordem[i];
+    registrar(s, d);
     p.res = pickPeso([
       { r: 'ganha', peso: d.ganha },
       { r: 'perde', peso: d.perde },
