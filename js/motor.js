@@ -139,13 +139,17 @@
   Motor.variante = variante;
 
   // ---------- álbum ----------
+  // Devolve { nova, novaVersao }: nova = primeira vez da carta; novaVersao =
+  // primeira vez desta versão (a carta com esta variante, ou sem nenhuma).
   function registrar(s, c, varId) {
     const pg = s.album[c.grupo] || (s.album[c.grupo] = {});
     const nova = !pg[c.nome];
     const e = pg[c.nome] || (pg[c.nome] = { n: 0, var: {} });
+    const comVariante = Object.values(e.var).reduce((n, k) => n + k, 0);
+    const novaVersao = varId ? !e.var[varId] : e.n === comVariante;
     e.n++;
     if (varId) e.var[varId] = (e.var[varId] || 0) + 1;
-    return nova;
+    return { nova, novaVersao };
   }
 
   // ---------- sorteio de cartas ----------
@@ -158,7 +162,7 @@
   function puxar(s, def, emMao, x) {
     x.c = sortearUma(def, emMao);
     x.var = sortearVariante(x.c);
-    x.nova = registrar(s, x.c, x.var);
+    Object.assign(x, registrar(s, x.c, x.var));
     if (x.var) log(s, `Carta ${variante(x.var).nome.toLowerCase()}: ${x.c.nome}!`);
     return x;
   }
@@ -305,7 +309,7 @@
     if (s.fim || !p) return false;
     if (p.tipo === 'tier3' && p.escolha === null) return false;
 
-    const r = { titulo: p.titulo, tipo: p.tipo, cartas: p.cartas, itens: p.itens || [], a: 0, l: 0, v: 0, nota: '' };
+    const r = { titulo: p.titulo, tipo: p.tipo, acao: p.acao, cartas: p.cartas, itens: p.itens || [], a: 0, l: 0, v: 0, nota: '' };
     const asc0 = s.asc, lou0 = s.lou, von0 = s.von;
 
     if (p.tipo === 'pacote') {
