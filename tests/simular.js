@@ -40,8 +40,9 @@ function resolverPend(s) {
   const p = s.pend;
   if (comItens && p.cartas) {
     p.cartas.forEach((x, i) => {
-      if (x.c.dec === 'perde' && s.inv.enxofre) M.usarEnxofre(s, i);
-      else if (x.c.dec === 'perde' && s.inv.transmutar) M.usarTransmutar(s, i);
+      const perde = M.efeito(x.c, x.var).dec === 'perde';
+      if (perde && s.inv.enxofre) M.usarEnxofre(s, i);
+      else if (perde && s.inv.transmutar) M.usarTransmutar(s, i);
     });
   }
   if (p.tipo === 'tier3') {

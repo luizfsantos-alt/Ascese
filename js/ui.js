@@ -5,8 +5,18 @@
   const M = window.Motor;
   const { fmtAL, fmtV } = M;
 
-  let s = M.novoEstado();
+  // O álbum fica salvo no aparelho e passa de uma partida para a outra.
+  const CHAVE_ALBUM = 'ascese.album';
+  function carregarAlbum() {
+    try { return JSON.parse(localStorage.getItem(CHAVE_ALBUM)) || {}; } catch (e) { return {}; }
+  }
+  function salvarAlbum() {
+    try { localStorage.setItem(CHAVE_ALBUM, JSON.stringify(s.album)); } catch (e) { /* sem armazenamento */ }
+  }
+
+  let s = M.novoEstado(carregarAlbum());
   let debugAberto = false;
+  let vendoAlbum = false;
 
   const pct = (n, max) => Math.min(100, (n / max) * 100).toFixed(1) + '%';
 
@@ -15,9 +25,10 @@
     const bom = invertido ? n < 0 : n > 0;
     return `<span class="${bom ? 'pos' : 'neg'}">${rotulo} ${n > 0 ? '+' : ''}${fmt(n)}</span> `;
   }
+  // c: carta, item ou efeito já calculado por M.efeito.
   function efeitos(c, semVontade) {
     if (c.dec === 'ganha') return '<span class="pos">Decisivo: Ascensão</span>';
-    if (c.dec === 'perde') return '<span class="neg">Decisivo: Loucura +80</span>';
+    if (c.dec === 'perde') return `<span class="neg">Decisivo: Loucura +${fmtAL(c.perda || D.PERDA_RITUAL)}</span>`;
     const t = ef(c.a, fmtAL, 'Asc', false) + ef(c.l, fmtAL, 'Louc', true) + (semVontade ? '' : ef(c.v, fmtV, 'Vont', false));
     return t || '<span>sem efeito</span>';
   }
@@ -36,6 +47,7 @@
       <p>${vit ? 'A Ascensão chegou a 100.' : 'A Loucura chegou a 100. Tudo se perdeu.'}</p>
       <p>Pacotes abertos: ${s.pacotes}</p>
       <button class="principal" data-cmd="reiniciar">Jogar de novo</button>
+      <button style="margin-top:8px;width:100%" data-cmd="album">${rotuloAlbum()}</button>
     </section>`;
   }
 
@@ -69,10 +81,12 @@
       if (s.inv.transmutar) b.push(`<button class="pequeno" data-cmd="transmutar" data-arg="${i}">Transmutar</button>`);
       if (b.length) botoes = `<div class="botoes">${b.join('')}</div>`;
     }
-    return `<div class="carta ${x.queimada ? 'queimada' : ''}">
-      <div class="nome">${c.nome}${c.cat ? ` <small>(${c.cat})</small>` : ''}</div>
+    const vr = x.var ? M.variante(x.var) : null;
+    const tags = (vr ? `<span class="tag ${vr.id}">${vr.nome}</span>` : '') + (x.nova ? '<span class="tag nova">Nova no álbum</span>' : '');
+    return `<div class="carta ${x.queimada ? 'queimada' : ''} ${vr ? 'var-' + vr.id : ''}">
+      <div class="nome">${c.nome}${c.cat ? ` <small>(${c.cat})</small>` : ''} ${tags}</div>
       ${c.desc ? `<div class="desc">${c.desc}</div>` : ''}
-      <div class="ef">${efeitos(c, semVontade)}</div>${botoes}</div>`;
+      <div class="ef">${efeitos(M.efeito(c, x.var), semVontade)}</div>${botoes}</div>`;
   }
 
   function painelPendente() {
@@ -130,6 +144,53 @@
     return `<section><h2>Registro</h2><ol class="log" reversed>${s.log.map((l) => `<li>${l}</li>`).join('')}</ol></section>`;
   }
 
+  // ---------- álbum ----------
+  function contarAlbum(pg) {
+    const vistas = s.album[pg.id] || {};
+    return pg.cartas.filter((c) => vistas[c.nome]).length;
+  }
+  function rotuloAlbum() {
+    const total = D.album.reduce((n, pg) => n + pg.cartas.length, 0);
+    const vistas = D.album.reduce((n, pg) => n + contarAlbum(pg), 0);
+    return `Álbum de cartas (${vistas}/${total})`;
+  }
+  function botaoAlbum() {
+    return `<button style="width:100%;margin-top:10px" data-cmd="album">${rotuloAlbum()}</button>`;
+  }
+
+  function infoAlbum(c, semVontade) {
+    if (c.info) return c.info;
+    if (c.ganha !== undefined) {
+      return `<span class="pos">Ascensão ${c.ganha}%</span> <span class="neg">Loucura ${c.perde}%</span>` +
+        (c.silencio ? ` <span>Silêncio ${c.silencio}%</span>` : '');
+    }
+    return efeitos(c, semVontade);
+  }
+
+  function telaAlbum() {
+    const legenda = D.variantes.map((vr) =>
+      `<div><span class="tag ${vr.id}">${vr.nome}</span> ${vr.desc}</div>`).join('');
+    const paginas = D.album.map((pg) => {
+      const vistas = s.album[pg.id] || {};
+      const semVontade = pg.id.startsWith('tier');
+      const cartas = pg.cartas.map((c) => {
+        const e = vistas[c.nome];
+        if (!e) return '<div class="carta oculta"><div class="nome">???</div><div class="desc">Ainda não encontrada</div></div>';
+        const vars = D.variantes.filter((vr) => e.var[vr.id])
+          .map((vr) => `<span class="tag ${vr.id}">${vr.nome} ×${e.var[vr.id]}</span>`).join(' ');
+        return `<div class="carta">
+          <div class="nome">${c.nome}${c.cat ? ` <small>(${c.cat})</small>` : ''}</div>
+          ${c.desc ? `<div class="desc">${c.desc}</div>` : ''}
+          <div class="ef">${infoAlbum(c, semVontade)}</div>
+          <div class="desc">${pg.id === 'tier3' ? 'Revelado' : pg.id === 'tier4' ? 'Caiu' : 'Puxada'} ×${e.n}${vars ? ' · ' + vars : ''}</div></div>`;
+      }).join('');
+      return `<details class="pagina"><summary>${pg.nome} <span>${contarAlbum(pg)}/${pg.cartas.length}</span></summary>${cartas}</details>`;
+    }).join('');
+    return `<section><h2>${rotuloAlbum()}</h2>
+      <button class="principal" data-cmd="album">Voltar ao jogo</button>
+      <div class="legenda">${legenda}</div>${paginas}</section>`;
+  }
+
   function painelDebug() {
     return `<details ${debugAberto ? 'open' : ''} id="debug"><summary>Debug</summary><section>
       <div class="linha-botoes">
@@ -140,12 +201,17 @@
         <button class="pequeno" data-cmd="dbg" data-arg="a10">Ascensão +10</button>
         <button class="pequeno" data-cmd="dbg" data-arg="itens">1 de cada item</button>
         <button class="pequeno perigo" data-cmd="reiniciar">Reiniciar</button>
+        <button class="pequeno perigo" data-cmd="limparAlbum">Limpar álbum</button>
       </div></section></details>`;
   }
 
   function render() {
     document.getElementById('medidores').innerHTML = medidores();
     const app = document.getElementById('app');
+    if (vendoAlbum) {
+      app.innerHTML = telaAlbum();
+      return;
+    }
     if (s.fim) {
       app.innerHTML = telaFim() + painelLog();
       return;
@@ -155,6 +221,7 @@
       painelPendente() +
       painelUltimo() +
       painelInventario() +
+      botaoAlbum() +
       painelLog() +
       painelDebug();
   }
@@ -169,7 +236,9 @@
     tier: () => M.abrirTier(s),
     silhueta: (a) => M.escolherSilhueta(s, +a),
     desistir: () => { if (confirm('Desistir do Ritual? Vontade vai a 0 e Loucura +25.')) M.desistir(s); },
-    reiniciar: () => { s = M.novoEstado(); },
+    reiniciar: () => { s = M.novoEstado(s.album); },
+    album: () => { vendoAlbum = !vendoAlbum; window.scrollTo(0, 0); },
+    limparAlbum: () => { if (confirm('Apagar todas as cartas do álbum?')) s.album = {}; },
     dbg: (a) => {
       if (a === 'itens') M.debug.itens(s);
       else ({ v: M.debug.vontade, l: M.debug.loucura, a: M.debug.ascensao })[a[0]](s, +a.slice(1));
@@ -182,6 +251,7 @@
     const d = document.getElementById('debug');
     if (d) debugAberto = d.open;
     comandos[b.dataset.cmd](b.dataset.arg);
+    salvarAlbum();
     render();
   });
   document.addEventListener('toggle', (e) => { if (e.target.id === 'debug') debugAberto = e.target.open; }, true);
