@@ -165,6 +165,29 @@
     4: { nome: 'Tier IV — Magia do Vazio' },
   };
 
+  // Álbum: cada grupo de cartas vira uma página. A carta guarda o id do grupo.
+  const album = [
+    ...acoes.map((ac) => ({ id: ac.id, nome: ac.nome, cartas: ac.cartas })),
+    { id: 'tier1', nome: 'Ritual — Tarô', cartas: arcanos },
+    { id: 'tier2', nome: 'Ritual — Alquimia', cartas: etapas },
+  ];
+  for (const pg of album) for (const c of pg.cartas) c.grupo = pg.id;
+
+  // Variantes de carta. No máximo uma por carta; chance sobre as cartas elegíveis.
+  // benef/malef multiplicam a parte boa e a ruim de cada efeito (Loucura negativa
+  // é benefício). Nos decisivos, malef escala a Loucura do decisivo de perda e
+  // inverte troca ganha ↔ perde.
+  const variantes = [
+    { id: 'invertida', nome: 'Invertida', chance: 0.0005, elegivel: 'todas', benef: -1, malef: -1, inverte: true,
+      desc: 'Inverte o sinal dos benefícios e malefícios' },
+    { id: 'imaculada', nome: 'Imaculada', chance: 0.005, elegivel: 'semMalef', benef: 2, malef: 1,
+      desc: 'Benefícios +100% (só cartas sem malefícios)' },
+    { id: 'chaga', nome: 'Chaga', chance: 0.05, elegivel: 'comMalef', benef: 1, malef: 1.5,
+      desc: 'Malefícios +50% (só cartas com malefícios)' },
+    { id: 'metalizada', nome: 'Metalizada', chance: 0.05, elegivel: 'todas', benef: 1.5, malef: 0.7,
+      desc: 'Benefícios +50%, malefícios −30%' },
+  ];
+
   const demonios = [
     { nome: 'Buer', ganha: 85, perde: 15, silencio: 0 },
     { nome: 'Paimon', ganha: 35, perde: 35, silencio: 30 },
@@ -172,7 +195,7 @@
   ];
 
   g.Dados = {
-    acoes, itens, tiers, demonios,
+    acoes, itens, tiers, demonios, album, variantes,
     META: A(100),               // Ascensão/Loucura para fim de jogo
     VONTADE_RITUAL: V(1000),
     PERDA_RITUAL: A(80),        // carta decisiva de perda

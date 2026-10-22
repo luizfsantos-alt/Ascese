@@ -37,7 +37,8 @@
   }
 
   // ---------- estado ----------
-  Motor.novoEstado = function () {
+  // album é guardado entre partidas: passe o da partida anterior.
+  Motor.novoEstado = function (album) {
     return {
       asc: 0, lou: 0, von: 0,
       desbloq: { plantar: true },
@@ -47,6 +48,7 @@
       ultimo: null,   // último resultado aplicado
       fim: null,      // 'vitoria' | 'derrota'
       pacotes: 0,
+      album: album || {}, // { grupo: { nome: { n, var: { id: n } } } }
       log: [],
     };
   };
@@ -103,16 +105,67 @@
   Motor.podeRitual = (s) => !s.fim && !s.ritual && !s.pend && s.von >= D.VONTADE_RITUAL;
   Motor.temCartas = (s) => !!s.pend && ['pacote', 'tier1', 'tier2'].includes(s.pend.tipo);
 
+  // ---------- variantes ----------
+  const variante = (id) => D.variantes.find((x) => x.id === id);
+  const temMalef = (c) => c.a < 0 || c.l > 0 || c.v < 0 || c.dec === 'perde';
+  function elegivel(vr, c) {
+    if (vr.elegivel === 'comMalef') return temMalef(c);
+    if (vr.elegivel === 'semMalef') return !temMalef(c);
+    return true;
+  }
+  function sortearVariante(c) {
+    let r = rnd();
+    for (const vr of D.variantes) {
+      if (!elegivel(vr, c)) continue;
+      if (r < vr.chance) return vr.id;
+      r -= vr.chance;
+    }
+    return null;
+  }
+
+  // Efeito da carta já com a variante: { a, l, v, dec, perda }.
+  Motor.efeito = function (c, varId) {
+    const vr = varId ? variante(varId) : null;
+    if (c.dec) {
+      let dec = c.dec, perda = D.PERDA_RITUAL;
+      if (vr && vr.inverte) dec = dec === 'ganha' ? 'perde' : 'ganha';
+      else if (vr && dec === 'perde') perda = Math.round(perda * vr.malef);
+      return { a: 0, l: 0, v: 0, dec, perda: dec === 'perde' ? perda : 0 };
+    }
+    if (!vr) return { a: c.a, l: c.l, v: c.v };
+    const m = (x, bom) => Math.round(x * (bom ? vr.benef : vr.malef));
+    return { a: m(c.a, c.a > 0), l: m(c.l, c.l < 0), v: m(c.v, c.v > 0) };
+  };
+  Motor.variante = variante;
+
+  // ---------- álbum ----------
+  function registrar(s, c, varId) {
+    const pg = s.album[c.grupo] || (s.album[c.grupo] = {});
+    const nova = !pg[c.nome];
+    const e = pg[c.nome] || (pg[c.nome] = { n: 0, var: {} });
+    e.n++;
+    if (varId) e.var[varId] = (e.var[varId] || 0) + 1;
+    return nova;
+  }
+
   // ---------- sorteio de cartas ----------
   function sortearUma(def, emMao) {
     let pool = def.cartas;
     if (def.distintas) pool = pool.filter((c) => !emMao.includes(c));
     return def.ponderado ? pickPeso(pool) : pick(pool);
   }
-  function sortearVarias(def) {
+  // Sorteia carta e variante, registra no álbum e preenche x.
+  function puxar(s, def, emMao, x) {
+    x.c = sortearUma(def, emMao);
+    x.var = sortearVariante(x.c);
+    x.nova = registrar(s, x.c, x.var);
+    if (x.var) log(s, `Carta ${variante(x.var).nome.toLowerCase()}: ${x.c.nome}!`);
+    return x;
+  }
+  function sortearVarias(s, def) {
     const cartas = [];
-    for (let i = 0; i < def.n; i++) cartas.push(sortearUma(def, cartas));
-    return cartas.map((c) => ({ c, queimada: false }));
+    for (let i = 0; i < def.n; i++) cartas.push(puxar(s, def, cartas.map((x) => x.c), { queimada: false }));
+    return cartas;
   }
   function defDoPend(s) {
     return s.pend.tipo === 'pacote' ? acao(s.pend.acao) : D.tiers[s.ritual.tier];
@@ -124,7 +177,7 @@
     const ac = acao(id);
     s.von -= ac.custo;
     s.pacotes++;
-    const pend = { tipo: 'pacote', acao: id, titulo: ac.nome, cartas: sortearVarias(ac), itens: [] };
+    const pend = { tipo: 'pacote', acao: id, titulo: ac.nome, cartas: sortearVarias(s, ac), itens: [] };
     if (ac.itens && rnd() < D.CHANCE_ITEM) {
       const key = pickPeso(ac.itens).key;
       addItem(s, key);
@@ -170,7 +223,7 @@
       const outras = p.cartas.filter((x, j) => j !== i).map((x) => x.c);
       gastarItem(s, 'transmutar');
       const antes = carta.c.nome;
-      carta.c = sortearUma(defDoPend(s), outras);
+      puxar(s, defDoPend(s), outras, carta);
       log(s, `Transmutar: ${antes} → ${carta.c.nome}.`);
       return true;
     }
@@ -206,7 +259,7 @@
     const t = s.ritual.tier;
     const def = D.tiers[t];
     if (t === 1 || t === 2) {
-      s.pend = { tipo: 'tier' + t, titulo: def.nome, cartas: sortearVarias(def) };
+      s.pend = { tipo: 'tier' + t, titulo: def.nome, cartas: sortearVarias(s, def) };
     } else if (t === 3) {
       s.pend = { tipo: 'tier3', titulo: def.nome, ordem: embaralhar(D.demonios), escolha: null, res: null };
     } else {
@@ -251,16 +304,18 @@
     if (p.tipo === 'pacote') {
       for (const x of p.cartas) {
         if (x.queimada) continue;
-        r.a += x.c.a; r.l += x.c.l; r.v += x.c.v;
+        const e = Motor.efeito(x.c, x.var);
+        r.a += e.a; r.l += e.l; r.v += e.v;
       }
       somar(s, r.a, r.l, r.v);
     } else if (p.tipo === 'tier1' || p.tipo === 'tier2') {
       let ganha = 0, perde = 0, a = 0, l = 0;
       for (const x of p.cartas) {
         if (x.queimada) continue;
-        if (x.c.dec === 'ganha') ganha++;
-        else if (x.c.dec === 'perde') perde++;
-        else { a += x.c.a; l += x.c.l; }
+        const e = Motor.efeito(x.c, x.var);
+        if (e.dec === 'ganha') ganha++;
+        else if (e.dec === 'perde') perde = Math.max(perde, e.perda);
+        else { a += e.a; l += e.l; }
       }
       somar(s, a, l, 0);
       if (ganha && perde) {
@@ -269,8 +324,8 @@
         s.asc = D.META;
         r.nota = 'Decisivo de Ascensão!';
       } else if (perde) {
-        s.lou += D.PERDA_RITUAL;
-        r.nota = 'Decisivo de Loucura: +80.';
+        s.lou += perde;
+        r.nota = `Decisivo de Loucura: +${Motor.fmtAL(perde)}.`;
       }
     } else if (p.tipo === 'tier3') {
       const d = p.ordem[p.escolha];
