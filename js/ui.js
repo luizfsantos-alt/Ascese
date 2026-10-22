@@ -205,6 +205,119 @@
       </div></section></details>`;
   }
 
+  // ---------- pacotinho de figurinhas ----------
+  // Ao abrir uma ação (ou um tier com cartas), mostra o pacote por cima da tela.
+  // Segurar por SEGURAR ms rasga o pacote e as cartas saem dele.
+  const SEGURAR = 1200;
+  let pacote = null; // { el, timer }
+
+  // Estrela dourada de dez pontas com "!": primeira vez que a versão sai.
+  const ESTRELA = (() => {
+    const pts = [];
+    for (let i = 0; i < 20; i++) {
+      const r = i % 2 ? 21 : 48;
+      const ang = (Math.PI / 10) * i - Math.PI / 2;
+      pts.push(`${(50 + r * Math.cos(ang)).toFixed(1)},${(50 + r * Math.sin(ang)).toFixed(1)}`);
+    }
+    return `<svg class="estrela" viewBox="0 0 100 100" aria-label="Primeira vez">
+      <polygon points="${pts.join(' ')}" fill="url(#ouro)" stroke="#7a5a10" stroke-width="2.5" stroke-linejoin="round"/>
+      <defs><linearGradient id="ouro" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#fff3b0"/><stop offset=".45" stop-color="#f0c040"/><stop offset="1" stop-color="#b07a10"/>
+      </linearGradient></defs>
+      <text x="50" y="51" text-anchor="middle" dominant-baseline="central" font-size="40" font-weight="900" fill="#4a3000">!</text></svg>`;
+  })();
+
+  function stat(n, fmt, rotulo, invertido) {
+    if (!n) return '';
+    const bom = invertido ? n < 0 : n > 0;
+    return `<div class="stat ${bom ? 'pos' : 'neg'}"><span>${rotulo}</span><b>${n > 0 ? '+' : ''}${fmt(n)}</b></div>`;
+  }
+  function statsCarta(e, semVontade) {
+    if (e.dec === 'ganha') return '<div class="stat pos"><span>Decisivo</span><b>Ascensão</b></div>';
+    if (e.dec === 'perde') return `<div class="stat neg"><span>Decisivo</span><b>Loucura +${fmtAL(e.perda)}</b></div>`;
+    const t = stat(e.a, fmtAL, 'Ascensão', false) + stat(e.l, fmtAL, 'Loucura', true) +
+      (semVontade ? '' : stat(e.v, fmtV, 'Vontade', false));
+    return t || '<div class="stat"><span>sem efeito</span></div>';
+  }
+
+  // Carta em formato de carta: nome, flavor text e stats.
+  function cartaFigurinha(x, semVontade, i) {
+    const c = x.c;
+    const vr = x.var ? M.variante(x.var) : null;
+    return `<div class="figurinha ${vr ? 'var-' + vr.id : ''}" style="--i:${i}">
+      ${x.novaVersao ? ESTRELA : ''}
+      <div class="face">
+        <div class="titulo">${c.nome}</div>
+        ${c.cat ? `<div class="tipo">${c.cat}</div>` : ''}
+        <div class="flavor">${c.desc ? c.desc : ''}</div>
+        <div class="stats">${statsCarta(M.efeito(c, x.var), semVontade)}</div>
+        ${vr ? `<div class="selo">${vr.nome}</div>` : ''}
+      </div>
+    </div>`;
+  }
+
+  function mostrarPacote(tema, titulo, cartas, itens, semVontade) {
+    fecharPacote();
+    const el = document.createElement('div');
+    el.className = 'pacote-tela';
+    el.innerHTML = `
+      <button class="pacote tema-${tema}" aria-label="Segure para abrir o pacote">
+        <span class="aba"></span>
+        <span class="corpo"><b>${titulo}</b><small>${cartas.length} ${cartas.length > 1 ? 'cartas' : 'carta'}</small></span>
+        <span class="progresso"><i></i></span>
+      </button>
+      <p class="dica">Segure para abrir</p>
+      <div class="cartas n${cartas.length}">${cartas.map((x, i) => cartaFigurinha(x, semVontade, i)).join('')}</div>
+      <div class="pacote-itens">${itens.map((k) => `<span>Item: ${D.itens[k].nome}</span>`).join('')}</div>
+      <button class="principal continuar">Continuar</button>`;
+    document.body.appendChild(el);
+    document.body.classList.add('com-pacote');
+    pacote = { el, timer: null };
+
+    const pk = el.querySelector('.pacote');
+    const soltar = () => {
+      if (!pacote || pacote.timer === null) return;
+      clearTimeout(pacote.timer);
+      pacote.timer = null;
+      pk.classList.remove('segurando');
+    };
+    const segurar = () => {
+      if (!pacote || pacote.timer !== null || el.classList.contains('aberto')) return;
+      pk.classList.add('segurando');
+      pacote.timer = setTimeout(() => {
+        pacote.timer = null;
+        pk.classList.remove('segurando');
+        el.classList.add('aberto');
+        el.querySelector('.continuar').focus({ preventScroll: true });
+      }, SEGURAR);
+    };
+    pk.addEventListener('pointerdown', (e) => { pk.setPointerCapture(e.pointerId); segurar(); });
+    pk.addEventListener('pointerup', soltar);
+    pk.addEventListener('pointercancel', soltar);
+    pk.addEventListener('lostpointercapture', soltar);
+    pk.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); segurar(); } });
+    pk.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') soltar(); });
+    pk.addEventListener('contextmenu', (e) => e.preventDefault());
+    el.querySelector('.continuar').addEventListener('click', fecharPacote);
+    pk.focus({ preventScroll: true });
+  }
+
+  function fecharPacote() {
+    if (!pacote) return;
+    clearTimeout(pacote.timer);
+    pacote.el.remove();
+    pacote = null;
+    document.body.classList.remove('com-pacote');
+  }
+
+  // Chamado depois de abrir: as cartas estão no pendente ou, se já aplicadas, no último.
+  function pacoteDoSorteio() {
+    const r = s.pend || s.ultimo;
+    if (!r || !r.cartas) return;
+    const tema = r.tipo === 'pacote' ? r.acao : r.tipo;
+    mostrarPacote(tema, r.titulo, r.cartas, r.itens || [], r.tipo !== 'pacote');
+  }
+
   function render() {
     document.getElementById('medidores').innerHTML = medidores();
     const app = document.getElementById('app');
@@ -227,13 +340,13 @@
   }
 
   const comandos = {
-    abrir: (a) => M.abrirPacote(s, a),
+    abrir: (a) => { if (M.abrirPacote(s, a)) pacoteDoSorteio(); },
     aplicar: () => M.aplicar(s),
     usar: (a) => M.usarItem(s, a),
     enxofre: (a) => M.usarEnxofre(s, +a),
     transmutar: (a) => M.usarTransmutar(s, a === undefined ? -1 : +a),
     ritual: () => M.iniciarRitual(s),
-    tier: () => M.abrirTier(s),
+    tier: () => { if (M.abrirTier(s)) pacoteDoSorteio(); },
     silhueta: (a) => M.escolherSilhueta(s, +a),
     desistir: () => { if (confirm('Desistir do Ritual? Vontade vai a 0 e Loucura +25.')) M.desistir(s); },
     reiniciar: () => { s = M.novoEstado(s.album); },

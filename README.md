@@ -17,3 +17,9 @@ Internamente Ascensão/Loucura são inteiros em 1/30 e Vontade em 1/3, para não
   - Imaculada (0,5%, só cartas sem malefício): benefícios +100%.
   - Invertida (0,05%, todas): inverte o sinal dos efeitos; num decisivo, troca ganha ↔ perde.
 - Loucura negativa conta como benefício. No decisivo de perda, Metalizada/Chaga escalam os +80 de Loucura.
+
+## Pacotinho
+
+- Ao abrir uma ação (ou os tiers I e II do Ritual) aparece um pacotinho na tela. Segure por 1,2 s para rasgar; as cartas saem dele.
+- Cada carta mostra nome, flavor text e stats, com o visual da variante (Metalizada com brilho metálico, Chaga, Imaculada, Invertida).
+- A estrela dourada de dez pontas com "!" marca a primeira vez que aquela versão (carta + variante, ou sem variante) sai.
