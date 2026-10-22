@@ -98,13 +98,13 @@
   // Ações do dia a dia. limiar e custo em Vontade (1/3).
   const acoes = [
     { id: 'plantar', nome: 'Plantar', limiar: V(0), custo: V(0), n: 2, distintas: false, cartas: plantas, itens: null },
-    { id: 'cozinhar', nome: 'Cozinhar', limiar: V(40), custo: V(3.33), n: 1, cartas: pratos,
+    { id: 'cozinhar', nome: 'Cozinhar', limiar: V(40), custo: V(8), multV: 2, n: 1, cartas: pratos,
       itens: [{ key: 'balsamo_leve_c', peso: 100 }] },
-    { id: 'pescar', nome: 'Pescar', limiar: V(130), custo: V(6.67), n: 1, cartas: peixes,
+    { id: 'pescar', nome: 'Pescar', limiar: V(130), custo: V(20), multV: 2.5, n: 1, cartas: peixes,
       itens: [{ key: 'calmante_leve', peso: 60 }, { key: 'balsamo_leve_p', peso: 40 }] },
-    { id: 'mercado', nome: 'Mercado', limiar: V(300), custo: V(13.33), n: 3, distintas: true, cartas: mercado,
+    { id: 'mercado', nome: 'Mercado', limiar: V(300), custo: V(50), multV: 3, n: 3, distintas: true, cartas: mercado,
       itens: [{ key: 'calmante', peso: 45 }, { key: 'balsamo', peso: 40 }, { key: 'enxofre', peso: 10 }, { key: 'transmutar', peso: 5 }] },
-    { id: 'explorar', nome: 'Explorar', limiar: V(600), custo: V(26.67), n: 1, ponderado: true, cartas: explorar, desafio: true,
+    { id: 'explorar', nome: 'Explorar', limiar: V(600), custo: V(120), multV: 3.3, n: 1, ponderado: true, cartas: explorar, desafio: true,
       itens: [{ key: 'calmante_forte', peso: 35 }, { key: 'balsamo_forte', peso: 35 }, { key: 'enxofre', peso: 15 }, { key: 'transmutar', peso: 15 }] },
   ];
 
@@ -143,6 +143,21 @@
     carta('Separação', 13.33, 5, 0),
   ];
 
+  // Calibração 1: tabelas acima ficam como no documento; aqui aplicamos os
+  // multiplicadores. Loucura do dia a dia ×2,25; Vontade das cartas por ação
+  // (multV); itens com metade da força contra a Loucura.
+  const MULT_LOUCURA_DIA = 2.25;
+  const MULT_ITEM_LOUCURA = 0.5;
+  for (const ac of acoes) {
+    for (const c of ac.cartas) {
+      c.l = Math.round(c.l * MULT_LOUCURA_DIA);
+      c.v = Math.round(c.v * (ac.multV || 1));
+    }
+  }
+  for (const it of Object.values(itens)) {
+    if (it.tipo === 'consumivel') it.l = Math.round(it.l * MULT_ITEM_LOUCURA);
+  }
+
   const tiers = {
     1: { nome: 'Tier I — Tarô', n: 3, distintas: true, cartas: arcanos },
     2: { nome: 'Tier II — Alquimia', n: 1, cartas: etapas },
@@ -163,7 +178,7 @@
     PERDA_RITUAL: A(80),        // carta decisiva de perda
     DESISTIR_LOUCURA: A(25),
     SILENCIO_PAIMON: { a: A(20), l: A(10) },
-    CHANCE_ITEM: 0.02,
+    CHANCE_ITEM: 0.2,
     CHANCE_DESAFIO: 0.01,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
